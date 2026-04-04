@@ -1,0 +1,398 @@
+
+:root {
+    --bg-app: #e5e5e5;
+    --bg-panel: #f8f9fa;
+    --text-main: #212529;
+    --text-data: #000000;
+    --border-dark: #868e96;
+    --border-light: #dee2e6;
+    
+    --canvas-bg: #ffffff;
+    --grid-line: #c3d2e6;
+    --wall: #495057;
+    
+    --robot: #0d6efd;
+    --path: #198754;
+    
+    --task-queue: #fd7e14;
+    --task-active: #198754;
+    --task-error: #dc3545;
+}
+
+* {
+    box-sizing: border-box; 
+}
+
+body {
+    background-color: var(--bg-app); 
+    color: var(--text-main);
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0; 
+    display: flex; 
+    height: 100vh; 
+    overflow: hidden;
+}
+
+
+// 2. SIDEBAR (PASSIVE TELEMETRY)
+
+#sidebar {
+    width: 380px; 
+    flex-shrink: 0;
+    background-color: var(--bg-panel); 
+    padding: 20px;
+    border-right: 2px solid var(--border-dark);
+    display: flex; 
+    flex-direction: column;
+    overflow-y: auto; 
+    z-index: 10; 
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+.header {
+    border-bottom: 2px solid var(--text-main);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+}
+
+h2 { 
+    margin: 0 0 5px 0; 
+    font-weight: bold; 
+    font-size: 1.4rem; 
+    letter-spacing: 1px;
+}
+
+.version {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8rem;
+    color: var(--border-dark);
+}
+
+.panel { 
+    background: #ffffff; 
+    padding: 15px; 
+    margin-bottom: 20px; 
+    border: 1px solid var(--border-dark);
+    border-radius: 2px;
+}
+
+.panel-label {
+    display: block;
+    background-color: var(--border-light);
+    margin: -15px -15px 15px -15px;
+    padding: 8px 15px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.status { 
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 1rem; 
+    font-weight: bold; 
+    display: block; 
+    color: var(--text-data);
+}
+
+#error-log { 
+    font-family: 'Consolas', 'Courier New', monospace;
+    color: var(--task-error); 
+    font-size: 0.85rem; 
+    min-height: 20px; 
+    margin-top: 10px; 
+}
+
+/* Sidebar Buttons */
+.control-panel {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+button {
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    border: 1px solid var(--border-dark);
+    padding: 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    flex: 1;
+    transition: background 0.1s;
+}
+
+#btn-power { background-color: var(--task-active); color: white; border-color: #146c43; }
+#btn-power:hover { background-color: #157347; }
+#btn-power.paused { background-color: var(--bg-panel); color: var(--text-main); }
+#btn-power.paused:hover { background-color: var(--border-light); }
+
+#btn-reset { background-color: var(--bg-panel); color: var(--task-error); }
+#btn-reset:hover { background-color: #ffe6e6; }
+
+/* Sidebar Metrics Grid */
+.metrics-grid {
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 10px;
+}
+
+.metric-card {
+    background: var(--bg-app); 
+    padding: 10px; 
+    border: 1px solid var(--border-light);
+}
+
+.metric-card.full-width { grid-column: span 2; }
+.metric-label { font-size: 0.7rem; font-weight: bold; margin-bottom: 5px; color: var(--border-dark); }
+.metric-value { 
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-weight: bold; 
+    font-size: 1.5rem; 
+    color: var(--text-data); 
+}
+.exception-label, .exception-value { color: var(--task-error); }
+
+   /* 3. MAIN WORKSPACE (CENTER DISPLAY) */
+#main-workspace {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 30px;
+    background-color: var(--bg-app);
+    overflow-y: auto;
+}
+
+/* Top Toolbar*/
+.workspace-toolbar {
+    background-color: var(--bg-panel);
+    border: 2px solid var(--border-dark);
+    padding: 8px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.1); 
+    align-self: center; 
+    width: 554px;
+    gap: 20px;
+}
+
+.toolbar-label {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-weight: bold;
+    color: var(--border-dark);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.toolbar-controls {
+    display: flex;
+    flex-grow: 1;
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.btn-tool {
+    flex: 1; /
+    justify-content: center; 
+    background-color: #ffffff;
+    color: var(--text-main);
+    border: none;
+    border-right: 1px solid var(--border-dark); 
+    padding: 10px 0; /* Slightly taller for better clickability */
+    cursor: pointer;
+    font-weight: bold;
+    font-family: 'Consolas', monospace;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.1s;
+}
+
+
+.btn-tool:hover {
+    background-color: var(--bg-app);
+}
+
+.btn-tool.active {
+    background-color: var(--text-main);
+    color: #ffffff;
+    box-shadow: inset 0 3px 6px rgba(0,0,0,0.3);
+}
+
+.tool-icon { 
+    font-size: 1.1em; 
+}
+
+/* Central Cockpit Shell */
+.workspace-cockpit {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 25px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+#canvas-container {
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+canvas { 
+    background-color: var(--canvas-bg); 
+    border: 2px solid var(--text-main); 
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.1);
+}
+
+.workspace-side-panel {
+    background-color: var(--bg-panel);
+    border: 2px solid var(--border-dark);
+    padding: 20px;
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.1); 
+    display: flex;
+    flex-direction: column;
+    width: 260px; 
+    flex-shrink: 0;
+}
+
+.console-label {
+    display: block;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--border-dark);
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+    text-align: center;
+    border-bottom: 2px solid var(--border-light);
+    padding-bottom: 10px;
+}
+
+/* Dispatch Strategy (Left) */
+.radio-group.vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.radio-btn {
+    display: flex;
+    align-items: center;
+    background: var(--bg-app);
+    padding: 15px;
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: 0.2s;
+    font-size: 0.95rem;
+    font-weight: bold;
+}
+
+.radio-btn:hover { background: var(--border-light); }
+.radio-btn input {
+    margin-right: 15px;
+    accent-color: var(--text-main);
+    transform: scale(1.2);
+}
+
+/* Energy Constraints (Right) */
+.config-list.vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.config-item-stacked {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-app);
+    padding: 10px 12px;
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+}
+
+.config-item-stacked label {
+    font-size: 0.65rem;
+    color: var(--text-main);
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-family: 'Consolas', monospace;
+}
+
+.config-item-stacked input {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--border-dark);
+    color: var(--task-active);
+    font-family: 'Consolas', monospace;
+    font-weight: bold;
+    font-size: 1.15rem;
+    text-align: left;
+    padding: 2px;
+    width: 100%;
+}
+
+.config-item-stacked input:focus {
+    outline: none;
+    border-color: var(--robot);
+}
+
+.btn-stacked {
+    background-color: var(--text-main);
+    color: #ffffff;
+    font-family: 'Consolas', monospace;
+    border: none;
+    padding: 15px;
+    margin-top: 20px; 
+    width: 100%;
+    text-transform: uppercase;
+}
+.btn-stacked:hover { background-color: #495057; }
+
+/* 5. ACTION MODAL (Z-INDEX 9999) */
+#action-panel {
+    position: fixed;
+    top: 50%;
+    left: 60%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    width: 450px;
+    background-color: #ffffff;
+    border: 2px solid var(--text-main);
+    box-shadow: 10px 10px 0px rgba(0,0,0,0.2); 
+    display: none;
+}
+
+.action-header {
+    background-color: var(--task-queue);
+    color: #000;
+    font-weight: bold;
+    padding: 10px 15px;
+    border-bottom: 2px solid var(--text-main);
+    font-family: 'Consolas', 'Courier New', monospace;
+}
+
+#action-panel p {
+    padding: 0 15px;
+    font-size: 0.9rem;
+}
+
+#action-list { padding: 0 15px 15px 15px; }
+
+.action-card {
+    border: 1px solid var(--border-dark);
+    background: var(--bg-panel);
+    padding: 10px; 
+    margin-top: 10px;
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+}
+
+.action-info { font-family: 'Consolas', 'Courier New', monospace; font-weight: bold; }
+.btn-push { background-color: var(--task-active); color: white; border: 1px solid #146c43; flex: 0;}
+.btn-ignore { background-color: var(--bg-app); color: var(--text-main); border: 1px solid var(--border-dark); flex: 0;}

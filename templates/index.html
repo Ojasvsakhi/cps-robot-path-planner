@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CPS Simulation Interface v1.0</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div id="sidebar">
+        <div class="header">
+            <h2>Cyber Physical System</h2>
+            <div class="version">D* Lite Agent</div>
+        </div>
+        
+        <div class="control-panel">
+            <button id="btn-power" onclick="togglePower()">START SIMULATION</button>
+            <button id="btn-reset" onclick="resetSystem()">RESET ENVIRONMENT</button>
+        </div>
+        
+        <div class="panel">
+            <strong class="panel-label">System Output</strong>
+            <span id="status-text" class="status">CONNECTING TO AGENT...</span>
+            <div id="error-log"></div>
+        </div>
+
+        <div class="panel" style="margin-bottom: 0;">
+            <strong class="panel-label">Live Metrics</strong>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">ODOMETRY</div>
+                    <div id="dist-text" class="metric-value">0.00</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">SYS_BATTERY</div>
+                    <div id="battery-text" class="metric-value">100%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">QUEUED TASKS</div>
+                    <div id="queue-text" class="metric-value">0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label exception-label">UNREACHABLE</div>
+                    <div id="unreachable-text" class="metric-value exception-value">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="action-panel">
+        <div class="action-header">SYS_INTERRUPT: ROUTE RESOLVED</div>
+        <p>A previously unreachable task now has a valid path. Execution paused.</p>
+        <div id="action-list"></div>
+    </div>
+
+    <div id="main-workspace">
+        
+        <div class="workspace-toolbar">
+            <span class="toolbar-label">CURSOR MODE:</span>
+            <div class="toolbar-controls">
+                <button class="btn-tool active" id="tool-wall" onclick="setCursorTool('wall')">
+                    <span class="tool-icon">■</span> OBSTACLE/WALL
+                </button>
+                <button class="btn-tool" id="tool-task" onclick="setCursorTool('task')">
+                    <span class="tool-icon">⌖</span> TASK
+                </button>
+            </div>
+        </div>
+        
+        <div class="workspace-cockpit">
+            
+            <div class="workspace-side-panel left-panel">
+                <strong class="console-label">DISPATCH STRATEGY</strong>
+                <div class="radio-group vertical" id="strategy-group">
+                    <label class="radio-btn">
+                        <input type="radio" name="dispatchMode" value="sequential" checked onchange="setExecutionMode(this.value)"> 
+                        <span>Sequential<br><small style="font-weight:normal; color:var(--border-dark);">(FIFO Mode)</small></span>
+                    </label>
+                    <label class="radio-btn">
+                        <input type="radio" name="dispatchMode" value="optimal" onchange="setExecutionMode(this.value)"> 
+                        <span>Optimal<br><small style="font-weight:normal; color:var(--border-dark);">(Nearest Neighbor)</small></span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="canvas-container">
+                <canvas id="warehouseCanvas" width="550" height="550"></canvas>
+            </div>
+
+            <div class="workspace-side-panel right-panel">
+                <strong class="console-label">ENERGY CONSTRAINTS</strong>
+                <div class="config-list vertical">
+                    <div class="config-item-stacked">
+                        <label>MAX CAP (mAh)</label>
+                        <input type="number" id="cfg-max" value="100" min="10">
+                    </div>
+                    <div class="config-item-stacked">
+                        <label>SAFETY RESERVE (%)</label>
+                        <input type="number" id="cfg-reserve" value="5" min="0">
+                    </div>
+                    <div class="config-item-stacked">
+                        <label>MOVE DRAIN</label>
+                        <input type="number" id="cfg-move" value="1.5" step="0.1">
+                    </div>
+                    <div class="config-item-stacked">
+                        <label>REPLAN DRAIN</label>
+                        <input type="number" id="cfg-replan" value="5.0" step="0.1">
+                    </div>
+                </div>
+                <button id="btn-apply-cfg" class="btn-stacked" onclick="updateEnergyConfig()">APPLY LIMITS</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
