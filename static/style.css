@@ -34,7 +34,7 @@ body {
 }
 
 
-// 2. SIDEBAR (PASSIVE TELEMETRY)
+ /* 2. SIDEBAR (PASSIVE TELEMETRY) */
 
 #sidebar {
     width: 380px; 
@@ -194,13 +194,13 @@ button {
 }
 
 .btn-tool {
-    flex: 1; /
+    flex: 1;
     justify-content: center; 
     background-color: #ffffff;
     color: var(--text-main);
     border: none;
     border-right: 1px solid var(--border-dark); 
-    padding: 10px 0; /* Slightly taller for better clickability */
+    padding: 10px 0;
     cursor: pointer;
     font-weight: bold;
     font-family: 'Consolas', monospace;
