@@ -27,10 +27,47 @@ const theme = {
     taskError: rootStyles.getPropertyValue('--task-error').trim()
 };
 
-let currentState = null;
+let curr_State = null;
 let lastActionCount = 0; 
 let visualRobotX = null;
 let visualRobotY = null;
+
+// Graph
+let telemetryChart;
+const maxDataPoints = 50;
+
+function initChart() {
+    const ctxChart = document.getElementById('telemetryChart').getContext('2d');
+    telemetryChart = new Chart(ctxChart, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Battery Level (%)',
+                data: [],
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.1,
+                pointBackgroundColor: [],
+                pointBorderColor: [],
+                pointRadius: 3,
+                
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { title: { display: true, text: 'Distance (Units)' } },
+                y: { min: 0, max: 100, title: { display: true, text: 'Battery %' } }
+            },
+            animation: false
+        }
+    });
+}
+
+initChart();
 
 // Workspace Tool Manager
 let currentCursorMode = 'wall';
@@ -61,12 +98,12 @@ async function apiCommand(payload) {
 async function fetchState() {
     try {
         const response = await fetch('/api/state');
-        currentState = await response.json();
+        curr_State = await response.json();
         updateUI();
         
-        if (visualRobotX === null && currentState) {
-            visualRobotX = currentState.robot_pos[0] * CELL_SIZE + CELL_SIZE / 2;
-            visualRobotY = currentState.robot_pos[1] * CELL_SIZE + CELL_SIZE / 2;
+        if (visualRobotX === null && curr_State) {
+            visualRobotX = curr_State.robot_pos[0] * CELL_SIZE + CELL_SIZE / 2;
+            visualRobotY = curr_State.robot_pos[1] * CELL_SIZE + CELL_SIZE / 2;
         }
     } catch (e) {
         DOM.statusText.innerText = "SYS_ERR: DISCONNECTED";
@@ -79,10 +116,18 @@ async function togglePower() {
 }
 
 async function resetSystem() {
-    // if(!confirm("WARNING: Proceed with full environment wipe?")) return;
     await apiCommand({ action: 'reset' });
     visualRobotX = CELL_SIZE / 2;
     visualRobotY = CELL_SIZE / 2;
+    
+    // Clear graph data and colors on reset
+    if (telemetryChart) {
+        telemetryChart.data.labels = [];
+        telemetryChart.data.datasets[0].data = [];
+        telemetryChart.data.datasets[0].pointBackgroundColor = [];
+        telemetryChart.update();
+    }
+    lastActionCount = 0;
 }
 
 async function setExecutionMode(mode) {
@@ -110,7 +155,7 @@ async function handleTaskAction(id, actionType) {
     await apiCommand({ action: actionType, id: id });
 }
 
-// Interaction Listener using the new Contextual Toolbar
+// Interaction Listener using the Contextual Toolbar
 canvas.addEventListener('click', async (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor((e.clientX - rect.left) / CELL_SIZE);
@@ -146,12 +191,12 @@ function drawTaskNode(x, y, color, number) {
 
 function renderLoop() {
     requestAnimationFrame(renderLoop); 
-    if (!currentState) return;
+    if (!curr_State) return;
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    for (let y = 0; y < currentState.grid.length; y++) {
-        for (let x = 0; x < currentState.grid[0].length; x++) {
+    for (let y = 0; y < curr_State.grid.length; y++) {
+        for (let x = 0; x < curr_State.grid[0].length; x++) {
             ctx.strokeStyle = theme.gridLine; 
             ctx.lineWidth = 1;
             ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
@@ -166,7 +211,7 @@ function renderLoop() {
                 ctx.setLineDash([]);
             }
             
-            if (currentState.grid[y][x] === 1) {
+            if (curr_State.grid[y][x] === 1) {
                 ctx.fillStyle = theme.wall; 
                 ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 ctx.beginPath();
@@ -180,22 +225,22 @@ function renderLoop() {
         }
     }
 
-    if (currentState.path && currentState.path.length > 0) {
+    if (curr_State.path && curr_State.path.length > 0) {
         ctx.beginPath();
-        ctx.moveTo(currentState.robot_pos[0] * CELL_SIZE + CELL_SIZE / 2, currentState.robot_pos[1] * CELL_SIZE + CELL_SIZE / 2);
-        currentState.path.forEach(node => ctx.lineTo(node[0] * CELL_SIZE + CELL_SIZE / 2, node[1] * CELL_SIZE + CELL_SIZE / 2));
-        ctx.strokeStyle = (currentState.active_task && currentState.active_task.id === 'RTB') ? theme.taskError : theme.path; 
+        ctx.moveTo(curr_State.robot_pos[0] * CELL_SIZE + CELL_SIZE / 2, curr_State.robot_pos[1] * CELL_SIZE + CELL_SIZE / 2);
+        curr_State.path.forEach(node => ctx.lineTo(node[0] * CELL_SIZE + CELL_SIZE / 2, node[1] * CELL_SIZE + CELL_SIZE / 2));
+        ctx.strokeStyle = (curr_State.active_task && curr_State.active_task.id === 'RTB') ? theme.taskError : theme.path; 
         ctx.lineWidth = 4;
         ctx.stroke();
     }
 
-    if (currentState.queue) currentState.queue.forEach(t => drawTaskNode(t.pos[0], t.pos[1], theme.taskQueue, t.id));
-    if (currentState.unreachable) currentState.unreachable.forEach(t => drawTaskNode(t.pos[0], t.pos[1], theme.taskError, t.id));
-    if (currentState.action_required) currentState.action_required.forEach(t => drawTaskNode(t.pos[0], t.pos[1], "#0dcaf0", t.id));
-    if (currentState.active_task && currentState.active_task.id !== 'RTB') drawTaskNode(currentState.active_task.pos[0], currentState.active_task.pos[1], theme.taskActive, currentState.active_task.id);
+    if (curr_State.queue) curr_State.queue.forEach(t => drawTaskNode(t.pos[0], t.pos[1], theme.taskQueue, t.id));
+    if (curr_State.unreachable) curr_State.unreachable.forEach(t => drawTaskNode(t.pos[0], t.pos[1], theme.taskError, t.id));
+    if (curr_State.action_required) curr_State.action_required.forEach(t => drawTaskNode(t.pos[0], t.pos[1], "#0dcaf0", t.id));
+    if (curr_State.active_task && curr_State.active_task.id !== 'RTB') drawTaskNode(curr_State.active_task.pos[0], curr_State.active_task.pos[1], theme.taskActive, curr_State.active_task.id);
 
-    const targetX = currentState.robot_pos[0] * CELL_SIZE + CELL_SIZE / 2;
-    const targetY = currentState.robot_pos[1] * CELL_SIZE + CELL_SIZE / 2;
+    const targetX = curr_State.robot_pos[0] * CELL_SIZE + CELL_SIZE / 2;
+    const targetY = curr_State.robot_pos[1] * CELL_SIZE + CELL_SIZE / 2;
     
     visualRobotX += (targetX - visualRobotX) * 0.25; 
     visualRobotY += (targetY - visualRobotY) * 0.25;
@@ -203,8 +248,8 @@ function renderLoop() {
     ctx.beginPath();
     ctx.arc(visualRobotX, visualRobotY, 16, 0, Math.PI * 2);
     
-    const currB = currentState.battery !== undefined ? currentState.battery : 100;
-    const dynamicThresh = currentState.dynamic_rtb || 0;
+    const currB = curr_State.battery !== undefined ? curr_State.battery : 100;
+    const dynamicThresh = curr_State.dynamic_rtb || 0;
     
     ctx.fillStyle = (currB <= dynamicThresh) ? theme.taskError : theme.robot; 
     if (currB <= 0) ctx.fillStyle = "#343a40"; 
@@ -218,14 +263,14 @@ function renderLoop() {
 }
 
 function updateUI() {
-    DOM.statusText.innerText = currentState.status;
-    DOM.distText.innerText = currentState.distance.toFixed(2);
-    DOM.queueText.innerText = currentState.queue.length;
-    DOM.unreachText.innerText = currentState.unreachable.length;
+    DOM.statusText.innerText = curr_State.status;
+    DOM.distText.innerText = curr_State.distance.toFixed(2);
+    DOM.queueText.innerText = curr_State.queue.length;
+    DOM.unreachText.innerText = curr_State.unreachable.length;
     
-    const maxVal = currentState.max_battery || 100;
-    const currVal = currentState.battery !== undefined ? currentState.battery : 100;
-    const dynamicThresh = currentState.dynamic_rtb || 0;
+    const maxVal = curr_State.max_battery || 100;
+    const currVal = curr_State.battery !== undefined ? curr_State.battery : 100;
+    const dynamicThresh = curr_State.dynamic_rtb || 0;
     
     const pct = (currVal / maxVal) * 100;
     DOM.batteryText.innerText = Math.floor(pct) + '%';
@@ -234,17 +279,17 @@ function updateUI() {
     else if (currVal > dynamicThresh) DOM.batteryText.style.color = theme.taskQueue;
     else DOM.batteryText.style.color = theme.taskError;
 
-    if (currentState.execution_mode) {
-        document.querySelector(`input[name="dispatchMode"][value="${currentState.execution_mode}"]`).checked = true;
+    if (curr_State.execution_mode) {
+        document.querySelector(`input[name="dispatchMode"][value="${curr_State.execution_mode}"]`).checked = true;
     }
     
-    const currentActionCount = currentState.action_required ? currentState.action_required.length : 0;
+    const curr_ActionCount = curr_State.action_required ? curr_State.action_required.length : 0;
     
-    if (currentActionCount > 0) {
-        if (currentActionCount > lastActionCount && !currentState.is_paused) togglePower(); 
+    if (curr_ActionCount > 0) {
+        if (curr_ActionCount > lastActionCount && !curr_State.is_paused) togglePower(); 
 
         DOM.actionPanel.style.display = "block";
-        const newHTML = currentState.action_required.map(task => `
+        const newHTML = curr_State.action_required.map(task => `
             <div class="action-card">
                 <span class="action-info">TARGET NODE #${task.id}</span>
                 <div class="action-btns">
@@ -259,20 +304,50 @@ function updateUI() {
         DOM.actionPanel.style.display = "none";
         if (DOM.actionList.innerHTML !== "") DOM.actionList.innerHTML = "";
     }
-    lastActionCount = currentActionCount;
+    lastActionCount = curr_ActionCount;
 
-    if (currentState.is_paused) {
+    if (curr_State.is_paused) {
         DOM.btnPower.innerText = "START SIMULATION";
         DOM.btnPower.className = "";
         DOM.statusText.style.color = currVal <= 0 ? theme.taskError : "var(--text-data)";
     } else {
         DOM.btnPower.innerText = "PAUSE SIMULATION";
         DOM.btnPower.className = "paused";
-        if (currentState.active_task && currentState.active_task.id === 'RTB') {
+        if (curr_State.active_task && curr_State.active_task.id === 'RTB') {
              DOM.statusText.style.color = theme.taskError;
         } else {
-             DOM.statusText.style.color = currentState.status.includes("OBSTACLE") ? theme.taskQueue : theme.taskActive;
+             DOM.statusText.style.color = curr_State.status.includes("OBSTACLE") ? theme.taskQueue : theme.taskActive;
         }
+    }
+
+    //  Telemetry Chart
+    const distance = parseFloat(curr_State.distance.toFixed(2));
+    const battery = Math.floor((curr_State.battery / curr_State.max_battery) * 100);
+
+    const labels = telemetryChart.data.labels;
+    const dataPoints = telemetryChart.data.datasets[0].data;
+    const pointColors = telemetryChart.data.datasets[0].pointBackgroundColor;
+
+    const lastLabel = labels.length > 0 ? labels[labels.length - 1] : -1;
+    const lastBattery = dataPoints.length > 0 ? dataPoints[dataPoints.length - 1] : -1;
+
+    if (lastLabel !== distance) {
+        labels.push(distance);
+        dataPoints.push(battery);
+        pointColors.push(theme.robot || '#0d6efd');
+
+        if (labels.length > maxDataPoints) {
+            labels.shift();
+            dataPoints.shift();
+            pointColors.shift();
+        }
+        telemetryChart.update();
+    } 
+    else if (lastLabel === distance && battery < lastBattery) {
+        dataPoints[dataPoints.length - 1] = battery;
+        pointColors[pointColors.length - 1] = '#ff0606';
+        pointBorders[pointBorders.length - 1] = '#ff0606';
+        telemetryChart.update();
     }
 }
 

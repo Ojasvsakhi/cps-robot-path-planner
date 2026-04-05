@@ -396,3 +396,11 @@ canvas {
 .action-info { font-family: 'Consolas', 'Courier New', monospace; font-weight: bold; }
 .btn-push { background-color: var(--task-active); color: white; border: 1px solid #146c43; flex: 0;}
 .btn-ignore { background-color: var(--bg-app); color: var(--text-main); border: 1px solid var(--border-dark); flex: 0;}
+#telemetryChart {
+    max-width: 100%;
+    height: auto !important;
+}
+
+.panel {
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.1); /* Match the sidebar/toolbar shadow */
+}

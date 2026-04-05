@@ -168,7 +168,9 @@ class CPSSystem:
             self.planner = DStarLitePlanner(self.grid_map, task['pos'])
             self.current_path = self.planner.set_start_and_plan(self.robot_pos) or []
             
-            if self.current_path:
+            if self.current_path or task['pos']==self.robot_pos:
+                if not self.current_path:
+                    self.current_path=[self.robot_pos]
                 found_path = True
                 self.active_task = task
                 break
