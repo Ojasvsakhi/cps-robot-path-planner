@@ -313,7 +313,7 @@ function updateUI() {
     } else {
         DOM.btnPower.innerText = "PAUSE SIMULATION";
         DOM.btnPower.className = "paused";
-        if (curr_State.active_task && curr_State.active_task.id === 'RTB') {
+        if (curr_State.active_task?.id === 'RTB') {
              DOM.statusText.style.color = theme.taskError;
         } else {
              DOM.statusText.style.color = curr_State.status.includes("OBSTACLE") ? theme.taskQueue : theme.taskActive;
@@ -327,6 +327,7 @@ function updateUI() {
     const labels = telemetryChart.data.labels;
     const dataPoints = telemetryChart.data.datasets[0].data;
     const pointColors = telemetryChart.data.datasets[0].pointBackgroundColor;
+    const pointBorderColor = telemetryChart.data.datasets[0].pointBorderColor;
 
     const lastLabel = labels.length > 0 ? labels[labels.length - 1] : -1;
     const lastBattery = dataPoints.length > 0 ? dataPoints[dataPoints.length - 1] : -1;
@@ -335,21 +336,23 @@ function updateUI() {
         labels.push(distance);
         dataPoints.push(battery);
         pointColors.push(theme.robot || '#0d6efd');
+        pointBorderColor.push(theme.robot || '#0d6efd');
 
         if (labels.length > maxDataPoints) {
             labels.shift();
             dataPoints.shift();
             pointColors.shift();
+            pointBorderColor.shift();
         }
         telemetryChart.update();
-    } 
-    else if (lastLabel === distance && battery < lastBattery) {
+    } else if (lastLabel === distance && battery < lastBattery) {
         dataPoints[dataPoints.length - 1] = battery;
         pointColors[pointColors.length - 1] = '#ff0606';
-        pointBorders[pointBorders.length - 1] = '#ff0606';
+        pointBorderColor[pointBorderColor.length - 1] = '#ff0606';
         telemetryChart.update();
     }
 }
 
+fetchState();
 setInterval(fetchState, 200);
 requestAnimationFrame(renderLoop);
