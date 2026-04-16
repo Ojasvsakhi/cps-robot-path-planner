@@ -65,4 +65,4 @@ class DStarLitePlanner:
                             counter += 1
                             heapq.heappush(pq, (f_score[neighbor], counter, neighbor))
 
-        return [] 
+        return []

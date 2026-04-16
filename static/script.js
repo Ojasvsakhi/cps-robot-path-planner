@@ -13,7 +13,8 @@ const DOM = {
     btnPower: document.getElementById('btn-power'),
     errorLog: document.getElementById('error-log'),
     toolWall: document.getElementById('tool-wall'),
-    toolTask: document.getElementById('tool-task')
+    toolTask: document.getElementById('tool-task'),
+    toolDyn: document.getElementById('tool-dyn')
 };
 
 const rootStyles = getComputedStyle(document.body);
@@ -31,6 +32,9 @@ let curr_State = null;
 let lastActionCount = 0; 
 let visualRobotX = null;
 let visualRobotY = null;
+
+// --- NEW: Global array to hold animated x/y values for moving obstacles ---
+let visualDynObs = [];
 
 // Graph
 let telemetryChart;
@@ -74,13 +78,13 @@ let currentCursorMode = 'wall';
 
 function setCursorTool(mode) {
     currentCursorMode = mode;
-    if (mode === 'wall') {
-        DOM.toolWall.classList.add('active');
-        DOM.toolTask.classList.remove('active');
-    } else {
-        DOM.toolTask.classList.add('active');
-        DOM.toolWall.classList.remove('active');
-    }
+    DOM.toolWall.classList.remove('active');
+    DOM.toolTask.classList.remove('active');
+    DOM.toolDyn.classList.remove('active');
+
+    if (mode === 'wall') DOM.toolWall.classList.add('active');
+    else if (mode === 'task') DOM.toolTask.classList.add('active');
+    else if (mode === 'dynamic') DOM.toolDyn.classList.add('active');
 }
 
 // API Helpers
@@ -119,6 +123,7 @@ async function resetSystem() {
     await apiCommand({ action: 'reset' });
     visualRobotX = CELL_SIZE / 2;
     visualRobotY = CELL_SIZE / 2;
+    visualDynObs = []; // Reset animated obstacle positions
     
     // Clear graph data and colors on reset
     if (telemetryChart) {
@@ -161,7 +166,9 @@ canvas.addEventListener('click', async (e) => {
     const x = Math.floor((e.clientX - rect.left) / CELL_SIZE);
     const y = Math.floor((e.clientY - rect.top) / CELL_SIZE);
     
-    const action = currentCursorMode === 'wall' ? 'toggle_wall' : 'add_task';
+    let action = 'toggle_wall';
+    if (currentCursorMode === 'task') action = 'add_task';
+    else if (currentCursorMode === 'dynamic') action = 'add_dynamic';
 
     const result = await apiCommand({ action: action, x: x, y: y });
     
@@ -195,8 +202,16 @@ function renderLoop() {
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // --- 1. Draw Grid and Static Walls ---
     for (let y = 0; y < curr_State.grid.length; y++) {
         for (let x = 0; x < curr_State.grid[0].length; x++) {
+            
+            // Check if cell contains a dynamic wall (we hide the static block so it slides cleanly)
+            let isDynamicWall = false;
+            if (curr_State.dynamic_obstacles) {
+                isDynamicWall = curr_State.dynamic_obstacles.some(obs => obs[0] === x && obs[1] === y);
+            }
+
             ctx.strokeStyle = theme.gridLine; 
             ctx.lineWidth = 1;
             ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
@@ -211,7 +226,8 @@ function renderLoop() {
                 ctx.setLineDash([]);
             }
             
-            if (curr_State.grid[y][x] === 1) {
+            // Draw static wall ONLY if it's not a dynamic obstacle's location
+            if (curr_State.grid[y][x] === 1 && !isDynamicWall) {
                 ctx.fillStyle = theme.wall; 
                 ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 ctx.beginPath();
@@ -225,6 +241,38 @@ function renderLoop() {
         }
     }
 
+    // --- 2. Animate and Draw Dynamic Obstacles ---
+    const dynObsData = curr_State.dynamic_obstacles || [];
+    
+    // Sync array sizes (when new dynamic obstacles are added)
+    if (visualDynObs.length !== dynObsData.length) {
+        visualDynObs = dynObsData.map(obs => ({
+            x: obs[0] * CELL_SIZE + CELL_SIZE / 2,
+            y: obs[1] * CELL_SIZE + CELL_SIZE / 2
+        }));
+    }
+
+    dynObsData.forEach((obs, idx) => {
+        const targetX = obs[0] * CELL_SIZE + CELL_SIZE / 2;
+        const targetY = obs[1] * CELL_SIZE + CELL_SIZE / 2;
+
+        // Smooth Interpolation
+        visualDynObs[idx].x += (targetX - visualDynObs[idx].x) * 0.25;
+        visualDynObs[idx].y += (targetY - visualDynObs[idx].y) * 0.25;
+
+        const vx = visualDynObs[idx].x;
+        const vy = visualDynObs[idx].y;
+
+        ctx.fillStyle = theme.taskError; 
+        ctx.fillRect(vx - (CELL_SIZE/2) + 4, vy - (CELL_SIZE/2) + 4, CELL_SIZE - 8, CELL_SIZE - 8);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 12px 'Consolas', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("MOV", vx, vy);
+    });
+
+    // --- 3. Draw Paths, Tasks, and Robot ---
     if (curr_State.path && curr_State.path.length > 0) {
         ctx.beginPath();
         ctx.moveTo(curr_State.robot_pos[0] * CELL_SIZE + CELL_SIZE / 2, curr_State.robot_pos[1] * CELL_SIZE + CELL_SIZE / 2);
@@ -242,6 +290,7 @@ function renderLoop() {
     const targetX = curr_State.robot_pos[0] * CELL_SIZE + CELL_SIZE / 2;
     const targetY = curr_State.robot_pos[1] * CELL_SIZE + CELL_SIZE / 2;
     
+    // Robot interpolation
     visualRobotX += (targetX - visualRobotX) * 0.25; 
     visualRobotY += (targetY - visualRobotY) * 0.25;
 
@@ -346,7 +395,6 @@ function updateUI() {
     else if (lastLabel === distance && battery < lastBattery) {
         dataPoints[dataPoints.length - 1] = battery;
         pointColors[pointColors.length - 1] = '#ff0606';
-        pointBorders[pointBorders.length - 1] = '#ff0606';
         telemetryChart.update();
     }
 }

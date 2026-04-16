@@ -3,6 +3,7 @@ from dynamic_path import DStarLitePlanner
 import threading
 import time
 import heapq
+import random
 
 class CPSSystem:
     def __init__(self):
@@ -20,6 +21,7 @@ class CPSSystem:
         
         self.reset()
         threading.Thread(target=self._hardware_loop, daemon=True).start()
+        threading.Thread(target=self._environment_loop, daemon=True).start()
 
     def reset(self):
         with self.state_lock:
@@ -29,6 +31,7 @@ class CPSSystem:
             self.task_queue = [] 
             self.unreachable_tasks = []
             self.action_required_tasks = []
+            self.dynamic_obstacles = []
             self.active_task = None 
             self.current_path = []
             self.distance_traveled = 0.0
@@ -54,10 +57,45 @@ class CPSSystem:
         heapq.heapify(new_queue)
         self.task_queue = new_queue
 
-    def _hardware_loop(self):
+    def _is_cell_free(self, nx, ny):
+        if self.grid_map[ny][nx] != 0: return False
+        if (nx, ny) == self.robot_pos or (nx, ny) == self.CHARGING_STATION: return False
+        if self.active_task and self.active_task.get('pos') == (nx, ny): return False
+        if any(t['pos'] == (nx, ny) for _, _, t in self.task_queue): return False
+        if any(t['pos'] == (nx, ny) for t in self.unreachable_tasks): return False
+        if any(t['pos'] == (nx, ny) for t in self.action_required_tasks): return False
+        return True
+
+    def _environment_loop(self):
+        """Runs on an independent thread so the world never pauses when the robot sleeps."""
         while True:
             if not self.system_paused:
-                
+                with self.state_lock:
+                    for i in range(len(self.dynamic_obstacles)):
+                        ox, oy = self.dynamic_obstacles[i]
+                        
+                        if self.grid_map[oy][ox] == 1:
+                            self.grid_map[oy][ox] = 0
+                        
+                        dirs = [(0,1), (1,0), (0,-1), (-1,0)]
+                        random.shuffle(dirs)
+                        new_pos = (ox, oy)
+                        for dx, dy in dirs:
+                            nx, ny = ox + dx, oy + dy
+                            if 0 <= nx < self.GRID_WIDTH and 0 <= ny < self.GRID_HEIGHT:
+                                if self._is_cell_free(nx, ny):
+                                    new_pos = (nx, ny)
+                                    break
+                        
+                        self.dynamic_obstacles[i] = new_pos
+                        self.grid_map[new_pos[1]][new_pos[0]] = 1
+            time.sleep(0.4) 
+
+    def _hardware_loop(self):
+        """The robot's brain. Handles pathfinding, execution, and battery management."""
+        while True:
+            if not self.system_paused:
+
                 dist_to_base = self.robot_pos[0] + self.robot_pos[1]
                 self.battery_required = (dist_to_base * self.drain_move) + 4
                 
@@ -187,8 +225,8 @@ class CPSSystem:
             if self.unreachable_tasks:
                 self.status = "IDLE. EXCEPTIONS IN QUEUE."    
             else:
-                self.active_task=self.CHARGING_STATION
-                "IDLE. AWAITING INSTRUCTIONS."
+                self.active_task = {'id': 'BASE', 'pos': self.CHARGING_STATION}
+                self.status = "IDLE. AWAITING INSTRUCTIONS."
 
     def _reevaluate_unreachable_tasks(self):
         newly_reachable = []
@@ -228,7 +266,7 @@ class CPSSystem:
         elif cmd == 'force_rtb':
             with self.state_lock:
                 if self.robot_pos != self.CHARGING_STATION and not self.charging_mode:
-                    if self.active_task and self.active_task['id'] != 'RTB':
+                    if self.active_task and self.active_task.get('id') not in ['RTB', 'BASE']:
                         priority = self._calculate_priority(self.active_task)
                         heapq.heappush(self.task_queue, (priority, self.active_task['id'], self.active_task))
                     
@@ -253,6 +291,16 @@ class CPSSystem:
                 self.task_counter += 1
                 priority = self._calculate_priority(task)
                 heapq.heappush(self.task_queue, (priority, task['id'], task))
+                
+        elif cmd == 'add_dynamic':
+            x, y = data['x'], data['y']
+            with self.state_lock:
+                if self._is_cell_free(x, y):
+                    self.grid_map[y][x] = 1
+                    self.dynamic_obstacles.append((x, y))
+                else:
+                    return {"success": False, "error": "ERR: CANNOT PLACE ON TASK/AGENT."}
+            return {"success": True}
             
         elif cmd == 'toggle_wall':
             x, y = data['x'], data['y']
@@ -264,7 +312,7 @@ class CPSSystem:
             with self.state_lock:
                 if any(t['pos'] == (x, y) for _, _, t in self.task_queue):
                     return {"success": False, "error": "ERR: TARGET COORDINATES OVERLAP."}
-            if self.active_task and (x, y) == self.active_task['pos']:
+            if self.active_task and (x, y) == self.active_task.get('pos'):
                 return {"success": False, "error": "ERR: ACTIVE TARGET BLOCKAGE."}
                 
             self.grid_map[y][x] = 1 if self.grid_map[y][x] == 0 else 0
@@ -298,6 +346,7 @@ class CPSSystem:
             "grid": self.grid_map, "robot_pos": self.robot_pos, "path": self.current_path,
             "queue": flat_queue, "unreachable": self.unreachable_tasks,
             "action_required": self.action_required_tasks, "active_task": self.active_task,
+            "dynamic_obstacles": self.dynamic_obstacles,
             "status": self.status, "distance": self.distance_traveled,
             "battery": self.battery_level, "max_battery": self.max_battery,
             "dynamic_rtb": self.battery_required, "is_paused": self.system_paused,
